@@ -104,6 +104,6 @@ contract MyGovernorTest is Test {
 
         console.log("Proposal State: ", uint256(governor.state(proposalId))); //Executed, 7
         assertEq(uint256(governor.state(proposalId)), 7);
-        assert(box.getNumber() == valueToStore);
+        assertEq(box.getNumber(), valueToStore);
     }
 }
