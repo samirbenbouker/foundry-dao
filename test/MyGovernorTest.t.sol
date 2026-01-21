@@ -24,7 +24,7 @@ contract MyGovernorTest is Test {
     address[] targets;
     uint256[] values;
 
-    uint256 public constant MIN_DELAY = 1 hours;
+    uint256 public constant MIN_DELAY = 3600;
     uint256 public constant VOTING_DELAY = 1;
     uint256 public constant VOTING_PERIOD = 50400;
 
@@ -32,9 +32,9 @@ contract MyGovernorTest is Test {
         govToken = new GovToken();
         govToken.mint(USER, INITIAL_SUPPLY);
 
-        vm.startPrank(USER);
-
+        vm.prank(USER);
         govToken.delegate(USER);
+
         timelock = new TimeLock(MIN_DELAY, proposers, executors);
         governor = new MyGovernor(govToken, timelock);
 
@@ -44,9 +44,7 @@ contract MyGovernorTest is Test {
 
         timelock.grantRole(proposerRole, address(governor));
         timelock.grantRole(executorRole, address(0));
-        timelock.revokeRole(adminRole, USER);
-
-        vm.stopPrank();
+        timelock.revokeRole(adminRole, address(this));
 
         box = new Box();
         box.transferOwnership(address(timelock));
@@ -70,13 +68,13 @@ contract MyGovernorTest is Test {
         uint256 proposalId = governor.propose(targets, values, calldatas, description);
 
         // view the state
-        console.log("Proposal State: ", uint256(governor.state(proposalId)));
+        console.log("Proposal State: ", uint256(governor.state(proposalId))); // Pending = 0
 
         vm.warp(block.timestamp + VOTING_DELAY + 1);
         vm.roll(block.number + VOTING_DELAY + 1);
 
-        console.log("Proposal State: ", uint256(governor.state(proposalId)));
-        assert(uint256(governor.state(proposalId)) == 1);
+        console.log("Proposal State: ", uint256(governor.state(proposalId))); // Active = 1
+        assertEq(uint256(governor.state(proposalId)), 1);
 
         // 2. Vote
         string memory reason = "cuz blue frog is cool";
@@ -88,16 +86,24 @@ contract MyGovernorTest is Test {
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         vm.roll(block.number + VOTING_PERIOD + 1);
 
+        console.log("Proposal State: ", uint256(governor.state(proposalId))); // Succeeded = 4
+        assertEq(uint256(governor.state(proposalId)), 4);
+
         // 3. Queue the Tx
         bytes32 descriptionHash = keccak256(abi.encodePacked(description));
         governor.queue(targets, values, calldatas, descriptionHash);
 
-        vm.warp(block.timestamp + VOTING_DELAY + 1);
-        vm.roll(block.number + VOTING_DELAY + 1);
+        vm.warp(block.timestamp + MIN_DELAY + 1);
+        vm.roll(block.number + MIN_DELAY + 1);
+
+        console.log("Proposal State: ", uint256(governor.state(proposalId))); //Queued, 5
+        assertEq(uint256(governor.state(proposalId)), 5);
 
         // 4. execute
         governor.execute(targets, values, calldatas, descriptionHash);
 
+        console.log("Proposal State: ", uint256(governor.state(proposalId))); //Executed, 7
+        assertEq(uint256(governor.state(proposalId)), 7);
         assert(box.getNumber() == valueToStore);
     }
 }
